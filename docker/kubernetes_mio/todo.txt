@@ -1,0 +1,6 @@
+da risolvere: 
+perde i dati al riavvio (ma dove li mette dynomite o elasticsearch?)
+lentezza all'avvio (sembra essere coductor server..)
+togliere i sample workflow (dal file di conf di conductor server)
+
+anche dynomite in locale ha var/lib/redis vuota

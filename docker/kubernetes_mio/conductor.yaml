@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: conductor-server
+spec:
+  ports:
+  - name: "8080"
+    port: 8080
+    targetPort: 8080
+  - name: "5000"
+    port: 5000
+    targetPort: 5000
+  selector:
+    app: conductor-server
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: conductor-server
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: conductor-server
+    spec:
+      hostAliases:
+      - ip: "127.0.0.1"
+        hostnames:
+          - "dyno1"
+          - "es"
+      containers:
+      - name: conductor-server
+        image: nexus.daf.teamdigitale.it/conductor:server2.8.0
+        env:
+        - name: CONFIG_PROP
+          value: config.properties
+        ports:
+        - containerPort: 8080
+
+      - name: conductor-ui
+        image: nexus.daf.teamdigitale.it/conductor:ui
+        env:
+        - name: WF_SERVER
+          value: http://conductor-server:8080/api/
+        ports:
+        - containerPort: 5000
+
+      - name: dynomite
+        image: nexus.daf.teamdigitale.it/dynomite
+#       image: v1r3n/dynomite
+#       image: conductor:dynomite
+#        livenessProbe:
+#          exec:
+#            command:
+#            - timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/8102'
+#          failureThreshold: 12
+#          periodSeconds: 5
+#          timeoutSeconds: 5
+        ports:
+        - containerPort: 8102
+        volumeMounts:
+          - name: config-volume-dynomite
+            mountPath: /dynomite/startup.sh
+            subPath: startup.sh
+          - name: config-volume-conductor
+            mountPath: /app/config/config.properties
+            subPath: config.properties
+          - name: glusterfsvol
+            mountPath: /var/lib/redis
+            subPath: conductor/redis
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:5.6.8
+        env:
+        - name: ES_JAVA_OPTS
+          value: -Xms512m -Xmx512m
+        - name: discovery.type
+          value: single-node
+        - name: transport.host
+          value: 0.0.0.0
+        - name: xpack.security.enabled
+          value: "false"
+#        livenessProbe:
+#          exec:
+#            command:
+#            - timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/9300'
+#          failureThreshold: 12
+#          periodSeconds: 5
+#          timeoutSeconds: 5
+        ports:
+        - containerPort: 9200
+        - containerPort: 9300
+#        volumeMounts:
+#          - name: glusterfsvol
+#            mountPath: /usr/share/elasticsearch/data
+#            subPath: conductor/elastic/data
+      imagePullSecrets:
+        - name: regsecret
+      volumes:
+      - name: config-volume-dynomite
+        configMap:
+          name: dynomite-startup
+          defaultMode: 0777
+      - name: config-volume-conductor
+        configMap:
+          name: conductor-config
+      - name: glusterfsvol
+        persistentVolumeClaim:
+         claimName: gluster-claim
+      nodeSelector:
+        nifi: "false"
+      restartPolicy: Always
+
